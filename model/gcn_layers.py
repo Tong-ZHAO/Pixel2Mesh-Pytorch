@@ -100,10 +100,10 @@ class GraphProjection(Module):
         for i in range(4):
             out = self.project(i, h, w, img_sizes[i], out_dims[i])
             feats.append(out)
-
-		output = torch.cat(feats, 1)
-
-		return output
+            
+        output = torch.cat(feats, 1)
+        
+        return output
 
     def project(self, index, h, w, img_size, out_dim):
 
@@ -131,6 +131,6 @@ class GraphProjection(Module):
         weights = torch.mul(x - x1, y - y1)
         Q22 = torch.mul(weights.view(-1, 1), Q22)
 
-		output = Q11 + Q21 + Q12 + Q22
+        output = Q11 + Q21 + Q12 + Q22
 
-		return outputs
+        return outputs

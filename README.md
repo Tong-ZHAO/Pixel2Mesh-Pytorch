@@ -6,6 +6,10 @@ This repository aims to implement the ECCV 2018 paper: [Pixel2Mesh: Generating 3
 
 * PyTorch 0.4
 * Python 3
-* pygcn
+
+## External Codes
+
+* [pygcn](https://github.com/tkipf/pygcn/tree/master/pygcn): GraphConvolution
+* [atlasnet](https://github.com/ThibaultGROUEIX/AtlasNet/tree/master/extension): Chamfer Distance
 
 More details will be added soon...
