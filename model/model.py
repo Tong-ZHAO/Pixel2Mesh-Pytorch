@@ -12,7 +12,7 @@ class P2M_Model(nn.Module):
     Implement the joint model for Pixel2mesh
     """
 
-    def __init__(self, use_cuda = False, features_dim, hidden_dim, coord_dim):
+    def __init__(self, features_dim, hidden_dim, coord_dim, use_cuda = False):
 
         super(P2M_Model, self).__init__()
         self.use_cuda = use_cuda
@@ -25,7 +25,7 @@ class P2M_Model(nn.Module):
 
     def build(self):
 
-        self.2Dnn = self.build_2dnn()
+        self.nn_2d = self.build_2dnn()
 
         self.GCN_0 = GBottleneck(6, self.features_dim, self.hidden_dim, self.coord_dim)
         self.GCN_1 = GBottleneck(6, self.features_dim + self.hidden_dim, self.hidden_dim, self.coord_dim)
@@ -43,7 +43,7 @@ class P2M_Model(nn.Module):
 
     def forward(self, img, input):
 
-        img_feats = self.2Dnn(img)
+        img_feats = self.nn_2d(img)
 
         # GCN Block 1
         x = self.GPR_0(img_feats, input)

@@ -133,4 +133,4 @@ class GraphProjection(Module):
 
         output = Q11 + Q21 + Q12 + Q22
 
-        return outputs
+        return output
