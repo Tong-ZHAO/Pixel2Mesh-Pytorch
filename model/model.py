@@ -69,6 +69,7 @@ class P2M_Model(nn.Module):
     def build_2dnn(self):
         # VGG16 at first, then try resnet
         # Can load params from model zoo
+        net = VGG16_Pixel2Mesh(n_classes_input = 3)
         return net
 
 
@@ -111,3 +112,66 @@ class GBottleneck(nn.Module):
         x_out = self.conv2(x_cat)
 
         return x_out, x_cat
+    
+    
+class VGG16_Pixel2Mesh(nn.Module):
+    
+    def __init__(self, n_classes_input = 3):
+        
+        self.conv0_1 = nn.Conv2d(n_classes_input, 16, 3, stride=1)
+        self.conv0_2 = nn.Conv2d(16, 16, 3, stride=1)
+        
+        self.conv1_1 = nn.Conv2d(16, 32, 3, stride=2)
+        self.conv1_2 = nn.Conv2d(32, 32, 3, stride=1)
+        self.conv1_3 = nn.Conv2d(32, 32, 3, stride=1)
+        
+        self.conv2_1 = nn.Conv2d(32, 64, 3, stride=2)
+        self.conv2_2 = nn.Conv2d(64, 64, 3, stride=1)
+        self.conv2_3 = nn.Conv2d(64, 64, 3, stride=1)
+        
+        self.conv3_1 = nn.Conv2d(64, 128, 3, stride=2)
+        self.conv3_2 = nn.Conv2d(128, 128, 3, stride=1)
+        self.conv3_3 = nn.Conv2d(128, 128, 3, stride=1)
+        
+        self.conv4_1 = nn.Conv2d(128, 256, 5, stride=2)
+        self.conv4_2 = nn.Conv2d(256, 256, 3, stride=1)
+        self.conv4_3 = nn.Conv2d(256, 256, 3, stride=1)
+        
+        self.conv5_1 = nn.Conv2d(256, 512, 5, stride=2)
+        self.conv5_2 = nn.Conv2d(512, 512, 3, stride=1)
+        self.conv5_3 = nn.Conv2d(512, 512, 3, stride=1)
+        self.conv5_4 = nn.Conv2d(512, 512, 3, stride=1)
+        
+    def forward(self, img):
+        
+        img = F.relu(self.conv0_1(img))
+        img = F.relu(self.conv0_2(img))
+        img0 = torch.squeeze(img)
+        
+        img = F.relu(self.conv1_1(img))
+        img = F.relu(self.conv1_2(img))
+        img = F.relu(self.conv1_3(img))
+        img1 = torch.squeeze(img)
+        
+        img = F.relu(self.conv2_1(img))
+        img = F.relu(self.conv2_2(img))
+        img = F.relu(self.conv2_3(img))
+        img2 = torch.squeeze(img)
+        
+        img = F.relu(self.conv3_1(img))
+        img = F.relu(self.conv3_2(img))
+        img = F.relu(self.conv3_3(img))
+        img3 = torch.squeeze(img)
+        
+        img = F.relu(self.conv4_1(img))
+        img = F.relu(self.conv4_2(img))
+        img = F.relu(self.conv4_3(img))
+        img4 = torch.squeeze(img)
+        
+        img = F.relu(self.conv5_1(img))
+        img = F.relu(self.conv5_2(img))
+        img = F.relu(self.conv5_3(img))
+        img = F.relu(self.conv5_4(img))
+        img5 = torch.squeeze(img)
+        
+        return [img2, img3, img4, img5]
