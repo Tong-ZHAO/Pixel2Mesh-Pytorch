@@ -28,8 +28,8 @@ class chamferFunction(Function):
         idx2 = idx2.cuda()
 
         chamfer.forward(xyz1, xyz2, dist1, dist2, idx1, idx2)
-        ctx.save_for_backward(xyz1, xyz2, idx1, idx2)
-        return dist1, dist2
+        ctx.save_for_backward()
+        return dist1, dist2, idx1, idx2
 
     @staticmethod
     def backward(ctx, graddist1, graddist2):

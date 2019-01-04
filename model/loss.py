@@ -2,7 +2,6 @@ import numpy as np
 import torch
 
 
-
 def laplace_coord(input, adj):
     
     # Inputs :
@@ -13,9 +12,8 @@ def laplace_coord(input, adj):
     # The laplacian coordinates of input with respect to edges as in adj
     
     adj_sum = torch.sum(adj, 2)
-    adj_sum = adj_sum.view(adj_sum.shape[0],adj_sum.shape[1],1)
+    adj_sum = adj_sum.view(adj_sum.shape[0], adj_sum.shape[1], 1)
     adj_new = torch.div(adj, adj_sum)
-    
     
     lap = input - torch.matmul(adj_new, input)
         

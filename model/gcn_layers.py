@@ -1,8 +1,36 @@
 import math
 import torch
+import numpy as np
 
 from torch.nn.parameter import Parameter
 from torch.nn.modules.module import Module
+
+from scipy.sparse import coo_matrix
+
+
+def torch_sparse_tensor(indice, value, size, use_cuda):
+
+    coo = coo_matrix((value, (indice[:, 0], indice[:, 1])), shape = size)
+    values = coo.data
+    indices = np.vstack((coo.row, coo.col))
+
+    i = torch.LongTensor(indices)
+    v = torch.FloatTensor(values)
+    shape = coo.shape
+
+    if use_cuda:
+        return torch.cuda.sparse.FloatTensor(i, v, shape)
+    else:
+        return torch.sparse.FloatTensor(i, v, shape)
+
+
+def dot(x, y, sparse = False):
+    """Wrapper for torch.matmul (sparse vs dense)."""
+    if sparse:
+        res = x.mm(y)
+    else:
+        res = torch.matmul(x, y)
+    return res
 
 
 class GraphConvolution(Module):
@@ -11,10 +39,15 @@ class GraphConvolution(Module):
     Similar to https://arxiv.org/abs/1609.02907
     """
 
-    def __init__(self, in_features, out_features, bias=True):
+    def __init__(self, in_features, out_features, adjs, bias=True, use_cuda = True):
         super(GraphConvolution, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
+
+        adj0 = torch_sparse_tensor(*adjs[0], use_cuda)
+        adj1 = torch_sparse_tensor(*adjs[1], use_cuda)
+        self.adjs = [adj0, adj1]
+
         self.weight = Parameter(torch.FloatTensor(in_features, out_features))
         if bias:
             self.bias = Parameter(torch.FloatTensor(out_features))
@@ -28,10 +61,12 @@ class GraphConvolution(Module):
         if self.bias is not None:
             self.bias.data.uniform_(-stdv, stdv)
 
-    def forward(self, input, adj):
+    def forward(self, input):
         support = torch.matmul(input, self.weight)
         #output = torch.spmm(adj, support)
-        output = torch.matmul(adj, support)
+        output1 = dot(self.adjs[0], support, True)
+        output2 = dot(self.adjs[1], support, True)
+        output = output1 + output2
         if self.bias is not None:
             return output + self.bias
         else:
@@ -61,7 +96,8 @@ class GraphPooling(Module):
 
     def forward(self, input):
 
-        new_vertices = 0.5 * torch.gather(input, index = self.pool_idx).sum(1)
+        new_features = input[self.pool_idx].clone()
+        new_vertices = 0.5 * new_features.sum(1)
         output = torch.cat((input, new_vertices), 0)
 
         return output
@@ -89,7 +125,7 @@ class GraphProjection(Module):
         self.img_feats = img_features 
 
         h = 248 * torch.div(input[:, 1], input[:, 2]) + 111.5
-        w = 248 * tf.divide(input[:, 0], -input[:, 2]) + 111.5
+        w = 248 * torch.div(input[:, 0], -input[:, 2]) + 111.5
 
         h = torch.clamp(h, min = 0, max = 223)
         w = torch.clamp(w, min = 0, max = 223)
@@ -112,25 +148,35 @@ class GraphProjection(Module):
         x = h / (224. / img_size)
         y = w / (224. / img_size)
 
-        x1, x2 = torch.floor(x).int(), torch.ceil(x).int()
-        y1, y2 = torch.floor(y).int(), torch.ceil(y).int()
+        x1, x2 = torch.floor(x).long(), torch.ceil(x).long()
+        y1, y2 = torch.floor(y).long(), torch.ceil(y).long()
 
-        Q11 = torch.index_select(torch.index_select(img_feat, 0, x1), 0, y1)
-        Q12 = torch.index_select(torch.index_select(img_feat, 0, x1), 0, y2)
-        Q21 = torch.index_select(torch.index_select(img_feat, 0, x2), 0, y1)
-        Q22 = torch.index_select(torch.index_select(img_feat, 0, x2), 0, y2)
+        x2 = torch.clamp(x2, max = img_size - 1)
+        y2 = torch.clamp(y2, max = img_size - 1)
+
+        #Q11 = torch.index_select(torch.index_select(img_feat, 1, x1), 1, y1)
+        #Q12 = torch.index_select(torch.index_select(img_feat, 1, x1), 1, y2)
+        #Q21 = torch.index_select(torch.index_select(img_feat, 1, x2), 1, y1)
+        #Q22 = torch.index_select(torch.index_select(img_feat, 1, x2), 1, y2)
+
+        Q11 = img_feat[:, x1, y1].clone()
+        Q12 = img_feat[:, x1, y2].clone()
+        Q21 = img_feat[:, x2, y1].clone()
+        Q22 = img_feat[:, x2, y2].clone()
+
+        x, y = x.long(), y.long()
 
         weights = torch.mul(x2 - x, y2 - y)
-        Q11 = torch.mul(weights.view(-1, 1), Q11)
+        Q11 = torch.mul(weights.float().view(-1, 1), torch.transpose(Q11, 0, 1))
 
         weights = torch.mul(x2 - x, y - y1)
-        Q12 = torch.mul(weights.view(-1, 1), Q12)
+        Q12 = torch.mul(weights.float().view(-1, 1), torch.transpose(Q12, 0 ,1))
 
         weights = torch.mul(x - x1, y2 - y)
-        Q21 = torch.mul(weights.view(-1, 1), Q21)
+        Q21 = torch.mul(weights.float().view(-1, 1), torch.transpose(Q21, 0, 1))
 
         weights = torch.mul(x - x1, y - y1)
-        Q22 = torch.mul(weights.view(-1, 1), Q22)
+        Q22 = torch.mul(weights.float().view(-1, 1), torch.transpose(Q22, 0, 1))
 
         output = Q11 + Q21 + Q12 + Q22
 

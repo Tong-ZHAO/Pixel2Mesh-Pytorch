@@ -12,24 +12,28 @@ class P2M_Model(nn.Module):
     Implement the joint model for Pixel2mesh
     """
 
-    def __init__(self, features_dim, hidden_dim, coord_dim, use_cuda = False):
+    def __init__(self, features_dim, hidden_dim, coord_dim, pool_idx, supports, use_cuda):
 
         super(P2M_Model, self).__init__()
-        self.use_cuda = use_cuda
         self.img_size = 224
 
         self.features_dim = features_dim
         self.hidden_dim = hidden_dim
         self.coord_dim = coord_dim
+        self.pool_idx = pool_idx
+        self.supports = supports
+        self.use_cuda = use_cuda
+
+        self.build()
 
 
     def build(self):
 
         self.nn_2d = self.build_2dnn()
 
-        self.GCN_0 = GBottleneck(6, self.features_dim, self.hidden_dim, self.coord_dim)
-        self.GCN_1 = GBottleneck(6, self.features_dim + self.hidden_dim, self.hidden_dim, self.coord_dim)
-        self.GCN_2 = GBottleneck(6, self.features_dim + self.hidden_dim, self.hidden_dim, self.hidden_dim)
+        self.GCN_0 = GBottleneck(6, self.features_dim, self.hidden_dim, self.coord_dim, self.supports[0], self.use_cuda)
+        self.GCN_1 = GBottleneck(6, self.features_dim + self.hidden_dim, self.hidden_dim, self.coord_dim, self.supports[1], self.use_cuda)
+        self.GCN_2 = GBottleneck(6, self.features_dim + self.hidden_dim, self.hidden_dim, self.hidden_dim, self.supports[2], self.use_cuda)
 
         self.GPL_1 = GraphPooling(self.pool_idx[0])
         self.GPL_2 = GraphPooling(self.pool_idx[1])
@@ -38,7 +42,7 @@ class P2M_Model(nn.Module):
         self.GPR_1 = GraphProjection()
         self.GPR_2 = GraphProjection()
 
-        self.GConv = GraphConvolution(n_features = self.hidden_dim, out_features = self.coord_dim)
+        self.GConv = GraphConvolution(in_features = self.hidden_dim, out_features = self.coord_dim, adjs = self.supports[2], use_cuda = self.use_cuda)
 
 
     def forward(self, img, input):
@@ -59,7 +63,7 @@ class P2M_Model(nn.Module):
         x = self.GPR_2(img_feats, x)
         x = torch.cat([x, x_cat], 1)
         x = self.GPL_2(x)
-        x = self.GCN_2(x)
+        x, _ = self.GCN_2(x)
 
         x = self.GConv(x)
 
@@ -75,11 +79,11 @@ class P2M_Model(nn.Module):
 
 class GResBlock(nn.Module):
 
-    def __init__(self, hidden_dim):
+    def __init__(self, in_dim, hidden_dim, adjs, use_cuda):
         super(GResBlock, self).__init__()
 
-        self.conv1 = GraphConvolution(in_features = hidden_dim, out_features = hidden_dim)
-        self.conv2 = GraphConvolution(in_features = hidden_dim, out_features = hidden_dim) 
+        self.conv1 = GraphConvolution(in_features = in_dim, out_features = hidden_dim, adjs = adjs, use_cuda = use_cuda)
+        self.conv2 = GraphConvolution(in_features = in_dim, out_features = hidden_dim, adjs = adjs, use_cuda = use_cuda) 
 
 
     def forward(self, input):
@@ -92,17 +96,17 @@ class GResBlock(nn.Module):
 
 class GBottleneck(nn.Module):
 
-    def __init(self, block_num, in_dim, hidden_dim, out_dim):
+    def __init__(self, block_num, in_dim, hidden_dim, out_dim, adjs, use_cuda):
         super(GBottleneck, self).__init__()
 
-        blocks = [GResBlock(in_dim = in_dim, hidden_dim = hidden_dim)]
+        blocks = [GResBlock(in_dim = hidden_dim, hidden_dim = hidden_dim, adjs = adjs, use_cuda = use_cuda)]
 
         for _ in range(block_num - 1):
-            blocks.append(GResBlock(in_dim = hidden_dim, hidden_dim = hidden_dim))
+            blocks.append(GResBlock(in_dim = hidden_dim, hidden_dim = hidden_dim, adjs = adjs, use_cuda = use_cuda))
 
         self.blocks = nn.Sequential(*blocks)
-        self.conv1 = GraphConvolution(in_features = in_dim, out_features = hidden_dim)
-        self.conv2 = GraphConvolution(in_features = hidden_dim, out_features = out_dim)
+        self.conv1 = GraphConvolution(in_features = in_dim, out_features = hidden_dim, adjs = adjs, use_cuda = use_cuda)
+        self.conv2 = GraphConvolution(in_features = hidden_dim, out_features = out_dim, adjs = adjs, use_cuda = use_cuda)
 
         
     def forward(self, input):
@@ -118,40 +122,42 @@ class VGG16_Pixel2Mesh(nn.Module):
     
     def __init__(self, n_classes_input = 3):
         
-        self.conv0_1 = nn.Conv2d(n_classes_input, 16, 3, stride=1)
-        self.conv0_2 = nn.Conv2d(16, 16, 3, stride=1)
+        super(VGG16_Pixel2Mesh, self).__init__()
+
+        self.conv0_1 = nn.Conv2d(n_classes_input, 16, 3, stride = 1, padding = 1)
+        self.conv0_2 = nn.Conv2d(16, 16, 3, stride = 1, padding = 1)
         
-        self.conv1_1 = nn.Conv2d(16, 32, 3, stride=2)
-        self.conv1_2 = nn.Conv2d(32, 32, 3, stride=1)
-        self.conv1_3 = nn.Conv2d(32, 32, 3, stride=1)
+        self.conv1_1 = nn.Conv2d(16, 32, 3, stride = 2, padding = 1) # 224 -> 112
+        self.conv1_2 = nn.Conv2d(32, 32, 3, stride = 1, padding = 1)
+        self.conv1_3 = nn.Conv2d(32, 32, 3, stride = 1, padding = 1)
         
-        self.conv2_1 = nn.Conv2d(32, 64, 3, stride=2)
-        self.conv2_2 = nn.Conv2d(64, 64, 3, stride=1)
-        self.conv2_3 = nn.Conv2d(64, 64, 3, stride=1)
+        self.conv2_1 = nn.Conv2d(32, 64, 3, stride = 2, padding = 1) # 112 -> 56
+        self.conv2_2 = nn.Conv2d(64, 64, 3, stride = 1, padding = 1)
+        self.conv2_3 = nn.Conv2d(64, 64, 3, stride = 1, padding = 1)
         
-        self.conv3_1 = nn.Conv2d(64, 128, 3, stride=2)
-        self.conv3_2 = nn.Conv2d(128, 128, 3, stride=1)
-        self.conv3_3 = nn.Conv2d(128, 128, 3, stride=1)
+        self.conv3_1 = nn.Conv2d(64, 128, 3, stride = 2, padding = 1) # 56 -> 28
+        self.conv3_2 = nn.Conv2d(128, 128, 3, stride = 1, padding = 1)
+        self.conv3_3 = nn.Conv2d(128, 128, 3, stride = 1, padding = 1)
         
-        self.conv4_1 = nn.Conv2d(128, 256, 5, stride=2)
-        self.conv4_2 = nn.Conv2d(256, 256, 3, stride=1)
-        self.conv4_3 = nn.Conv2d(256, 256, 3, stride=1)
+        self.conv4_1 = nn.Conv2d(128, 256, 5, stride = 2, padding = 2) # 28 -> 14
+        self.conv4_2 = nn.Conv2d(256, 256, 3, stride = 1, padding = 1)
+        self.conv4_3 = nn.Conv2d(256, 256, 3, stride = 1, padding = 1)
         
-        self.conv5_1 = nn.Conv2d(256, 512, 5, stride=2)
-        self.conv5_2 = nn.Conv2d(512, 512, 3, stride=1)
-        self.conv5_3 = nn.Conv2d(512, 512, 3, stride=1)
-        self.conv5_4 = nn.Conv2d(512, 512, 3, stride=1)
+        self.conv5_1 = nn.Conv2d(256, 512, 5, stride = 2, padding = 2) # 14 -> 7
+        self.conv5_2 = nn.Conv2d(512, 512, 3, stride = 1, padding = 1)
+        self.conv5_3 = nn.Conv2d(512, 512, 3, stride = 1, padding = 1)
+        self.conv5_4 = nn.Conv2d(512, 512, 3, stride = 1, padding = 1)
         
     def forward(self, img):
         
         img = F.relu(self.conv0_1(img))
         img = F.relu(self.conv0_2(img))
-        img0 = torch.squeeze(img)
+        #img0 = torch.squeeze(img)
         
         img = F.relu(self.conv1_1(img))
         img = F.relu(self.conv1_2(img))
         img = F.relu(self.conv1_3(img))
-        img1 = torch.squeeze(img)
+        #img1 = torch.squeeze(img)
         
         img = F.relu(self.conv2_1(img))
         img = F.relu(self.conv2_2(img))
