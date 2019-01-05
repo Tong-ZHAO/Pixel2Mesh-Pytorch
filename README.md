@@ -4,8 +4,10 @@ This repository aims to implement the ECCV 2018 paper: [Pixel2Mesh: Generating 3
 
 ## Requirements
 
-* PyTorch 0.4
-* Python 3
+* PyTorch 1.0 (Enable Sparse Tensor)
+* >= Python 3
+* >= Cuda 9.2 (Enable Chamfer Distance)
+* Visdom (Enable Data Visualization)
 
 ## External Codes
 
@@ -13,3 +15,16 @@ This repository aims to implement the ECCV 2018 paper: [Pixel2Mesh: Generating 3
 * [atlasnet](https://github.com/ThibaultGROUEIX/AtlasNet/tree/master/extension): Chamfer Distance
 
 More details will be added soon...
+
+## Build
+
+```
+cd ./model/chamfer/
+python setup.py install
+```
+
+## Run
+
+```
+python train.py
+```
