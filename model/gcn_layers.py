@@ -19,7 +19,7 @@ def torch_sparse_tensor(indice, value, size, use_cuda):
     shape = coo.shape
 
     if use_cuda:
-        return torch.cuda.sparse.FloatTensor(i, v, shape)
+        return torch.sparse.FloatTensor(i, v, shape).cuda()
     else:
         return torch.sparse.FloatTensor(i, v, shape)
 

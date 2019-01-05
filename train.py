@@ -20,15 +20,16 @@ import random
 # Parameters
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataRoot', type = str, default = '../data/ShapeNetSmall/', help = 'file root')
-parser.add_argument('--dataTrainList', type = str, default = 'data/train_list_small.txt', help = 'train file list')
-parser.add_argument('--dataTestList', type = str, default = 'data/test_list_small.txt', help = 'test file list')
+parser.add_argument('--dataTrainList', type = str, default = 'data/train_list_plane.txt', help = 'train file list')
+parser.add_argument('--dataTestList', type = str, default = 'data/test_list_plane.txt', help = 'test file list')
 parser.add_argument('--workers', type = int, help = 'number of data loading workers', default = 12)
 parser.add_argument('--nEpoch', type = int, default = 30, help = 'number of epochs to train for')
 parser.add_argument('--hidden', type = int, default = 192,  help = 'number of units in  hidden layer')
 parser.add_argument('--featDim', type = int, default = 963,  help = 'number of units in perceptual feature layer')
 parser.add_argument('--coordDim', type = int, default = 3,  help='number of units in output layer')
 parser.add_argument('--weightDecay', type = float, default = 5e-6, help = 'weight decay for L2 loss')
-parser.add_argument('--lr', type = float, default = 1e-2, help = 'learning rate')
+parser.add_argument('--lr', type = float, default = 3e-5, help = 'learning rate')
+parser.add_argument('--env', type = str, default ="pixel2mesh", help = 'visdom environment')
 
 opt = parser.parse_args()
 print (opt)
@@ -48,7 +49,7 @@ import dist_chamfer as ext
 distChamfer = ext.chamferDist()
 
 # Launch visdom for visualization
-vis = visdom.Visdom(port = 8097)
+vis = visdom.Visdom(port = 8097, env = opt.env)
 now = datetime.datetime.now()
 save_path = now.isoformat()
 dir_name =  os.path.join('log', save_path)
@@ -117,14 +118,14 @@ for epoch in range(opt.nEpoch):
 
         pred_pts = network(img, init_pts)
 
-        dist1, dist2, _, _ = distChamfer(pred_pts, pts)
+        dist1, dist2 = distChamfer(pts, pred_pts.unsqueeze(0))
         loss = torch.mean(dist1) + torch.mean(dist2)
         loss.backward()
         train_loss.update(loss.item())
         optimizer.step()
 
         if i % 50 <= 0:
-            vis.scatter(X = pts.data.cpu(),
+            vis.scatter(X = torch.squeeze(pts).data.cpu(),
                     win = 'TRAIN_INPUT',
                     opts = dict(
                         title = "TRAIN_INPUT",
@@ -139,7 +140,7 @@ for epoch in range(opt.nEpoch):
                         ),
                     )
         
-        print('[%d: %d/%d] train loss:  %f ' %(epoch, i, len_dataset / opt.batchSize, loss.item()))
+        print('[%d: %d/%d] train loss:  %f ' %(epoch, i, len_dataset, loss.item()))
 
     # Update visdom curve
     train_curve.append(train_loss.avg)
@@ -161,7 +162,7 @@ for epoch in range(opt.nEpoch):
 
             pred_pts = network(img, init_mesh)
 
-            dist1, dist2, _, _ = distChamfer(pred_pts, pts)
+            dist1, dist2 = distChamfer(pts, pred_pts.unsqueeze(0))
             loss = torch.mean(dist1) + torch.mean(dist2)
             val_loss.update(loss.item())
 
@@ -169,7 +170,7 @@ for epoch in range(opt.nEpoch):
                 best_val_loss = loss.item()
             
             if i%200 ==0 :
-                vis.scatter(X = pts.data.cpu(),
+                vis.scatter(X = torch.squeeze(pts).data.cpu(),
                         win = 'VAL_INPUT',
                         opts = dict(
                             title = "VAL_INPUT",

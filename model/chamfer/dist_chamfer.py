@@ -13,6 +13,7 @@ import chamfer
 class chamferFunction(Function):
     @staticmethod
     def forward(ctx, xyz1, xyz2):
+        
         batchsize, n, _ = xyz1.size()
         _, m, _ = xyz2.size()
 
@@ -28,8 +29,8 @@ class chamferFunction(Function):
         idx2 = idx2.cuda()
 
         chamfer.forward(xyz1, xyz2, dist1, dist2, idx1, idx2)
-        ctx.save_for_backward()
-        return dist1, dist2, idx1, idx2
+        ctx.save_for_backward(xyz1, xyz2, idx1, idx2)
+        return dist1, dist2
 
     @staticmethod
     def backward(ctx, graddist1, graddist2):
