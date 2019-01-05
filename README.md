@@ -5,8 +5,8 @@ This repository aims to implement the ECCV 2018 paper: [Pixel2Mesh: Generating 3
 ## Requirements
 
 * PyTorch 1.0 (Enable Sparse Tensor)
-* >= Python 3
-* >= Cuda 9.2 (Enable Chamfer Distance)
+* \>= Python 3
+* \>= Cuda 9.2 (Enable Chamfer Distance)
 * Visdom (Enable Data Visualization)
 
 ## External Codes
