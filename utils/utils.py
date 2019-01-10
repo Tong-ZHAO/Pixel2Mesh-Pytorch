@@ -1,5 +1,6 @@
 import numpy as np
 import pickle
+import visdom
 
 
 def read_init_mesh(file):
@@ -69,4 +70,35 @@ class AverageValueMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+
+def create_vis_plot(vis, _xlabel, _ylabel, _title, _legend):
+    return vis.line(
+        X = torch.zeros((1,)).cpu(),
+        Y = torch.zeros((1, 3)).cpu(),
+        opts = dict(
+            xlabel = _xlabel,
+            ylabel = _ylabel,
+            title =_title,
+            legend = _legend
+        )
+    )
+
+
+def update_vis_plot(vis, iteration, loc, conf, window1, window2, update_type,
+                    epoch_size = 1):
+    vis.line(
+        X = torch.ones((1, 3)).cpu() * iteration,
+        Y = torch.Tensor([loc, conf, loc + conf]).unsqueeze(0).cpu() / epoch_size,
+        win = window1,
+        update = update_type
+    )
+    # initialize epoch plot on first iteration
+    if iteration == 0:
+        vis.line(
+            X = torch.zeros((1, 3)).cpu(),
+            Y = torch.Tensor([loc, conf, loc + conf]).unsqueeze(0).cpu(),
+            win = window2,
+            update = True
+        )
     

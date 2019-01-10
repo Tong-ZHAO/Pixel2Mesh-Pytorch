@@ -28,8 +28,9 @@ parser.add_argument('--hidden', type = int, default = 192,  help = 'number of un
 parser.add_argument('--featDim', type = int, default = 963,  help = 'number of units in perceptual feature layer')
 parser.add_argument('--coordDim', type = int, default = 3,  help='number of units in output layer')
 parser.add_argument('--weightDecay', type = float, default = 5e-6, help = 'weight decay for L2 loss')
-parser.add_argument('--lr', type = float, default = 3e-5, help = 'learning rate')
-parser.add_argument('--env', type = str, default ="pixel2mesh", help = 'visdom environment')
+parser.add_argument('--lr', type = float, default = 1e-4, help = 'learning rate')
+parser.add_argument('--env', type = str, default = "pixel2mesh", help = 'visdom environment')
+parser.add_argument('--lamb', type = float, default = 0.001, help = 'loss coeff for img reconstruction task')
 
 opt = parser.parse_args()
 print (opt)
@@ -116,15 +117,18 @@ for epoch in range(opt.nEpoch):
             normal = normal.cuda()
             init_pts = init_pts.cuda()
 
-        pred_pts = network(img, init_pts)
+        pred_pts, pred_img = network(img, init_pts)
 
         dist1, dist2 = distChamfer(pts, pred_pts.unsqueeze(0))
-        loss = torch.mean(dist1) + torch.mean(dist2)
+        rect_loss = torch.nn.functional.binary_cross_entropy(pred_img, img, size_average = False)
+        l1_loss = L1Tensor(pred_img, img)
+
+        loss = torch.mean(dist1) + torch.mean(dist2) + opt.lamb * (rect_loss + l1_loss)
         loss.backward()
         train_loss.update(loss.item())
         optimizer.step()
 
-        if i % 50 <= 0:
+        if i % 50 == 0:
             vis.scatter(X = torch.squeeze(pts).data.cpu(),
                     win = 'TRAIN_INPUT',
                     opts = dict(
@@ -138,6 +142,18 @@ for epoch in range(opt.nEpoch):
                         title="TRAIN_INPUT_RECONSTRUCTED",
                         markersize=2,
                         ),
+                    )
+            vis.image(img.data.cpu().squeeze(),
+                    win = 'INPUT IMAGE',
+                    opts = dict(
+                        title = 'Input Image', 
+                        caption = 'Input Image')
+                    )
+            vis.image(pred_img.data.cpu().squeeze(),
+                    win = 'RECONSTRUCTED IMAGE',
+                    opts = dict(
+                        title = 'Reconstructed Image', 
+                        caption = 'Reconstructed Image')
                     )
         
         print('[%d: %d/%d] train loss:  %f ' %(epoch, i, len_dataset, loss.item()))
@@ -160,16 +176,19 @@ for epoch in range(opt.nEpoch):
                 normal = normal.cuda()
                 init_pts = init_pts.cuda()
 
-            pred_pts = network(img, init_mesh)
+            pred_pts, pred_img = network(img, init_pts)
 
             dist1, dist2 = distChamfer(pts, pred_pts.unsqueeze(0))
-            loss = torch.mean(dist1) + torch.mean(dist2)
+            rect_loss = torch.nn.functional.binary_cross_entropy(pred_img, img, size_average = False)
+            l1_loss = L1Tensor(pred_img, img)
+
+            loss = torch.mean(dist1) + torch.mean(dist2) + opt.lamb * (rect_loss + l1_loss)
             val_loss.update(loss.item())
 
             if loss.item() < best_val_loss:
                 best_val_loss = loss.item()
             
-            if i%200 ==0 :
+            if i % 200 ==0 :
                 vis.scatter(X = torch.squeeze(pts).data.cpu(),
                         win = 'VAL_INPUT',
                         opts = dict(
@@ -184,6 +203,19 @@ for epoch in range(opt.nEpoch):
                             markersize = 2,
                             ),
                         )
+                vis.image(img.data.cpu().squeeze(),
+                    win = 'INPUT IMAGE',
+                    opts = dict(
+                        title = 'Input Image', 
+                        caption = 'Input Image')
+                    )
+                vis.image(pred_img.data.cpu().squeeze(),
+                    win = 'RECONSTRUCTED IMAGE',
+                    opts = dict(
+                        title = 'Reconstructed Image', 
+                        caption = 'Reconstructed Image')
+                    )
+
             print('[%d: %d/%d] val loss:  %f ' %(epoch, i, len(dataset_test), loss_net.item()))
 
     # Update visdom curve

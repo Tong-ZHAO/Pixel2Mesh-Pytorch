@@ -59,6 +59,18 @@ def edge_length_loss(input, adjs, use_cuda = True):
     loss = torch.mean(torch.sum( torch.pow(diff,2), (1,2,3))) * 300
     
     return loss
+
+
+def L1Tensor(img1, img2) : 
+	""" input shoudl be tensor and between 0 and 1"""
+	mae = torch.mean(torch.abs(img2 - img1))
+	return mae
+
+
+def L2Tensor(img1, img2) : 
+	""" input shoudl be tensor and between 0 and 1"""
+	mse = torch.mean((img2 - img1) ** 2)
+	return mse
     
     
 
