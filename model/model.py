@@ -45,6 +45,9 @@ class P2M_Model(nn.Module):
 
         self.GConv = GraphConvolution(in_features = self.hidden_dim, out_features = self.coord_dim, adjs = self.supports[2], use_cuda = self.use_cuda)
 
+        self.GPL_12 = GraphPooling(self.pool_idx[0])
+        self.GPL_22 = GraphPooling(self.pool_idx[1])
+
 
     def forward(self, img, input):
 
@@ -52,25 +55,27 @@ class P2M_Model(nn.Module):
 
         # GCN Block 1
         x = self.GPR_0(img_feats, input)
-        x, x_cat = self.GCN_0(x)
+        x1, x_cat = self.GCN_0(x)
+        x1_2 = self.GPL_12(x1)
 
         # GCN Block 2
-        x = self.GPR_1(img_feats, x)
+        x = self.GPR_1(img_feats, x1)
         x = torch.cat([x, x_cat], 1)
         x = self.GPL_1(x)
-        x, x_cat = self.GCN_1(x)
+        x2, x_cat = self.GCN_1(x)
+        x2_2 = self.GPL_22(x2)
         
         # GCN Block 3
-        x = self.GPR_2(img_feats, x)
+        x = self.GPR_2(img_feats, x2)
         x = torch.cat([x, x_cat], 1)
         x = self.GPL_2(x)
         x, _ = self.GCN_2(x)
 
-        x = self.GConv(x)
+        x3 = self.GConv(x)
 
         new_img = self.nn_decoder(img_feats)
 
-        return x, new_img
+        return [x1, x2, x3], [input, x1_2, x2_2], new_img
 
 
     def build_encoder(self):
@@ -214,6 +219,6 @@ class VGG16_Decoder(nn.Module):
         x = F.relu(self.conv_4(x))
         x = F.relu(self.conv_5(x))
 
-        return F.sigmoid(x)
+        return torch.sigmoid(x)
 
 

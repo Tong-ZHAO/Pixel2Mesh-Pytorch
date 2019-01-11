@@ -2,63 +2,72 @@ import numpy as np
 import torch
 from gcn_layers import torch_sparse_tensor, dot
 
+# Define Chamfer Loss
+import sys
+sys.path.append("model/chamfer/")
+import dist_chamfer as ext
+distChamfer = ext.chamferDist()
 
-def laplace_coord(input, adj):
+
+def laplace_coord(input, lap_idx, block_id, use_cuda = True):
     
     # Inputs :
-    # input : nodes Tensor, size (n_batch, n_pts, n_features)
-    # adj : zero-one edges matrix Tensor, size (n_batch, n_pts, n_pts)
+    # input : nodes Tensor, size (n_pts, n_features)
+    # lap_idx : laplace index matrix Tensor, size (n_pts, 10)
     # 
     # Returns : 
-    # The laplacian coordinates of input with respect to edges as in adj
-    
-    adj_sum = torch.sum(adj, 2)
-    adj_sum = adj_sum.view(adj_sum.shape[0], adj_sum.shape[1], 1)
-    adj_new = torch.div(adj, adj_sum)
-    
-    lap = input - dot(adj_new, input, True)
-        
-    return lap
+    # The laplacian coordinates of input with respect to edges as in lap_idx
 
-def laplace_loss(input1, input2, adjs, block_id, use_cuda = True):
-    
+
+    vertex = torch.cat((input, torch.zeros(1, 3).cuda()), 0) if use_cuda else torch.cat((input, torch.zeros(1,3)), 0)
+    indices = torch.tensor(lap_idx[block_id][:, :8])
+    weights = torch.tensor(lap_idx[block_id][:,-1], dtype = torch.float32)
+
+    if use_cuda:
+        indices = indices.cuda()
+        weights = weights.cuda()
+
+    weights = torch.reciprocal(weights).reshape((-1, 1)).repeat((1, 3))
+    laplace = torch.sum(vertex[indices], 1)
+    laplace = input - torch.mul(laplace, weights)
+        
+    return laplace
+
+def laplace_loss(input1, input2, lap_idx, block_id, use_cuda = True):
+
     # Inputs : 
     # input1, input2 : nodes Tensor before and after the deformation
-    # adjs : (adjs[0], adjs[1]) where adjs[1]: non-negative edges matrix Tensor, size (n_batch, n_pts, n_pts)
+    # lap_idx : laplace index matrix Tensor, size (n_pts, 10)
     # block_id : id of the deformation block (if different than 1 then adds
     # a move loss as in the original TF code)
     #
     # Returns :
     # The Laplacian loss, with the move loss as an additional term when relevant
-    
-    adj = (torch_sparse_tensor(*adjs[1], use_cuda) > 0)
-    
-    lap1 = laplace_coord(input1, adj)
-    lap2 = laplace_coord(input2, adj)
-    
-    laplace_loss = torch.mean(torch.sum( torch.pow(lap1-lap2,2), (1,2))) * 1500
-    
-    if block_id == 1:
-        move_loss = torch.Tensor(0.)
-    else:
-        move_loss = torch.mean(torch.sum( torch.pow(input1-input2,2), (1,2))) * 100
-    
-    return laplace_loss + move_loss
 
-def edge_length_loss(input, adjs, use_cuda = True):
-    
-    # Inputs :
-    # input : nodes Tensor, size (n_batch, n_pts, n_features)
-    # adjs : (adjs[0], adjs[1]) where adjs[1]: non-negative edges matrix Tensor, size (n_batch, n_pts, n_pts)
-    
-    adj = (torch_sparse_tensor(*adjs[1], use_cuda) > 0).repeat((1,1,1,3))
-    input1 = input.repeat((1,1,input.shape[1],1))
-    input2 = input.repeat((1,input.shape[1],1,1))
-    diff = torch.mul(adj,input1-input2)
-    
-    loss = torch.mean(torch.sum( torch.pow(diff,2), (1,2,3))) * 300
-    
-    return loss
+    lap1 = laplace_coord(input1, lap_idx, block_id, use_cuda)
+    lap2 = laplace_coord(input2, lap_idx, block_id, use_cuda)
+    laplace_loss = torch.mean(torch.sum(torch.pow(lap1 - lap2, 2), 1)) * 1500
+    move_loss = torch.mean(torch.sum(torch.pow(input1 - input2, 2), 1)) * 100
+
+    if block_id == 0:
+        return laplace_loss
+    else:
+        return laplace_loss + move_loss
+
+
+
+def edge_loss(pred, gt_pts, edges, block_id):
+
+	# edge in graph
+    nod1 = pred[edges[block_id][:, 0]]
+    nod2 = pred[edges[block_id][:, 1]]
+    edge = nod1 - nod2
+
+	# edge length loss
+    edge_length = torch.sum(torch.pow(edge, 2), 1)
+    edge_loss = torch.mean(edge_length) * 300
+
+    return edge_loss
 
 
 def L1Tensor(img1, img2) : 
@@ -71,8 +80,42 @@ def L2Tensor(img1, img2) :
 	""" input shoudl be tensor and between 0 and 1"""
 	mse = torch.mean((img2 - img1) ** 2)
 	return mse
+
+
+def total_pts_loss(pred_pts_list, pred_feats_list, gt_pts, ellipsoid, use_cuda = True):
+    """
+    pred_pts_list: [x1, x1_2, x2, x2_2, x3]
+    """
+
+    my_chamfer_loss, my_edge_loss, my_lap_loss = 0., 0., 0.
+    lap_const = [0.2, 1., 1.]
+
+    for i in range(3):
+        dist1, dist2 = distChamfer(gt_pts, pred_pts_list[i].unsqueeze(0))
+        my_chamfer_loss += torch.mean(dist1) + torch.mean(dist2)
+
+        my_edge_loss += edge_loss(pred_pts_list[i], gt_pts, ellipsoid["edges"], i)
+
+        my_lap_loss += lap_const[i] * laplace_loss(pred_feats_list[i], pred_pts_list[i], ellipsoid["lap_idx"], i, use_cuda)
+
+    my_pts_loss = my_chamfer_loss + 0.1 * my_edge_loss + 0.3 * my_lap_loss
+
+    return my_pts_loss
+
+
+
+def total_img_loss(pred_img, gt_img):
+
+    my_rect_loss = torch.nn.functional.binary_cross_entropy(pred_img, gt_img, size_average = False)
+    my_l1_loss = L1Tensor(pred_img, gt_img)
+
+    img_loss = my_rect_loss + my_l1_loss
+
+    return img_loss
     
     
+
+
 
 if False:#__name__ == '__main__':
     

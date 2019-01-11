@@ -30,7 +30,7 @@ parser.add_argument('--coordDim', type = int, default = 3,  help='number of unit
 parser.add_argument('--weightDecay', type = float, default = 5e-6, help = 'weight decay for L2 loss')
 parser.add_argument('--lr', type = float, default = 1e-4, help = 'learning rate')
 parser.add_argument('--env', type = str, default = "pixel2mesh", help = 'visdom environment')
-parser.add_argument('--lamb', type = float, default = 0.001, help = 'loss coeff for img reconstruction task')
+parser.add_argument('--lamb', type = float, default = 0.0001, help = 'loss coeff for img reconstruction task')
 
 opt = parser.parse_args()
 print (opt)
@@ -38,16 +38,13 @@ print (opt)
 # Read initial mesh
 num_blocks = 3
 num_supports = 2
-ellipsiod = read_init_mesh('data/info_ellipsoid.dat')
+ellipsoid = read_init_mesh('data/info_ellipsoid.dat')
 
 # Check Device (CPU / GPU)
 use_cuda = torch.cuda.is_available()
 dtype = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 
-# Define Chamfer Loss
-sys.path.append("model/chamfer/")
-import dist_chamfer as ext
-distChamfer = ext.chamferDist()
+
 
 # Launch visdom for visualization
 vis = visdom.Visdom(port = 8097, env = opt.env)
@@ -77,7 +74,7 @@ print('testing set', len(dataset_test))
 
 
 # Create Network
-network = P2M_Model(opt.featDim, opt.hidden, opt.coordDim, ellipsiod['pool_idx'], ellipsiod['supports'], use_cuda)
+network = P2M_Model(opt.featDim, opt.hidden, opt.coordDim, ellipsoid['pool_idx'], ellipsoid['supports'], use_cuda)
 network.apply(weights_init) #initialization of the weight
 
 if use_cuda:
@@ -94,10 +91,20 @@ with open(logname, 'a') as f: #open and append
     f.write(str(network) + '\n')
 
 # Initialize visdom
-train_curve, val_curve = [], []
+vis_title = 'Pixel2Mesh'
+vis_legend = ['Image Loss', 'Mesh Loss', 'Total Loss']
+iter_plot = create_vis_plot(vis, 'Iteration', 'Loss', vis_title, vis_legend)
+
+
 
 # Train model on the dataset
 for epoch in range(opt.nEpoch):
+
+    # Initialize loss
+    my_img_loss = 0.
+    my_pts_loss = 0.
+
+    update_vis_plot(vis, 0, my_img_loss, my_pts_loss, iter_plot, "replace")
     # Set to Train mode
     train_loss.reset()
     network.train()
@@ -107,9 +114,13 @@ for epoch in range(opt.nEpoch):
         optimizer = optim.Adam(network.parameters(), lr = lrate)
 
     for i, data in enumerate(dataloader, 0):
+
+        if i != 0 and (i % 50 == 0):
+            update_vis_plot(vis, i, my_img_loss, my_pts_loss, iter_plot, "append")
+
         optimizer.zero_grad()
         img, pts, normal, _, _ = data
-        init_pts = torch.from_numpy(ellipsiod['coord'])
+        init_pts = torch.from_numpy(ellipsoid['coord'])
 
         if use_cuda:
             img = img.cuda()
@@ -117,13 +128,12 @@ for epoch in range(opt.nEpoch):
             normal = normal.cuda()
             init_pts = init_pts.cuda()
 
-        pred_pts, pred_img = network(img, init_pts)
+        pred_pts_list, pred_feats_list, pred_img = network(img, init_pts)
 
-        dist1, dist2 = distChamfer(pts, pred_pts.unsqueeze(0))
-        rect_loss = torch.nn.functional.binary_cross_entropy(pred_img, img, size_average = False)
-        l1_loss = L1Tensor(pred_img, img)
+        my_img_loss = opt.lamb * total_img_loss(pred_img, img)
+        my_pts_loss = total_pts_loss(pred_pts_list, pred_feats_list, pts, ellipsoid, use_cuda)
 
-        loss = torch.mean(dist1) + torch.mean(dist2) + opt.lamb * (rect_loss + l1_loss)
+        loss = my_pts_loss + my_img_loss if epoch == 0 else my_pts_loss
         loss.backward()
         train_loss.update(loss.item())
         optimizer.step()
@@ -136,10 +146,24 @@ for epoch in range(opt.nEpoch):
                         markersize = 2,
                         ),
                     )
-            vis.scatter(X = pred_pts.data.cpu(),
-                    win = 'TRAIN_INPUT_RECONSTRUCTED',
+            vis.scatter(X = pred_pts_list[0].data.cpu(),
+                    win = 'TRAIN_INPUT_RECONSTRUCTED_L1',
                     opts = dict(
-                        title="TRAIN_INPUT_RECONSTRUCTED",
+                        title="TRAIN_INPUT_RECONSTRUCTED_L1",
+                        markersize=2,
+                        ),
+                    )
+            vis.scatter(X = pred_pts_list[1].data.cpu(),
+                    win = 'TRAIN_INPUT_RECONSTRUCTED_L2',
+                    opts = dict(
+                        title="TRAIN_INPUT_RECONSTRUCTED_L2",
+                        markersize=2,
+                        ),
+                    )
+            vis.scatter(X = pred_pts_list[2].data.cpu(),
+                    win = 'TRAIN_INPUT_RECONSTRUCTED_L3',
+                    opts = dict(
+                        title="TRAIN_INPUT_RECONSTRUCTED_L3",
                         markersize=2,
                         ),
                     )
@@ -158,8 +182,8 @@ for epoch in range(opt.nEpoch):
         
         print('[%d: %d/%d] train loss:  %f ' %(epoch, i, len_dataset, loss.item()))
 
-    # Update visdom curve
-    train_curve.append(train_loss.avg)
+
+    """
 
     # Validation
     val_loss.reset()
@@ -168,7 +192,7 @@ for epoch in range(opt.nEpoch):
     with torch.no_grad():
         for i, data in enumerate(dataloader_test, 0):
             img, pts, normal, _, _ = data
-            init_pts = torch.from_numpy(ellipsiod['coord'])
+            init_pts = torch.from_numpy(ellipsoid['coord'])
 
             if use_cuda:
                 img = img.cuda()
@@ -176,13 +200,12 @@ for epoch in range(opt.nEpoch):
                 normal = normal.cuda()
                 init_pts = init_pts.cuda()
 
-            pred_pts, pred_img = network(img, init_pts)
+            pred_pts_list, pred_feats_list, pred_img = network(img, init_pts)
 
-            dist1, dist2 = distChamfer(pts, pred_pts.unsqueeze(0))
-            rect_loss = torch.nn.functional.binary_cross_entropy(pred_img, img, size_average = False)
-            l1_loss = L1Tensor(pred_img, img)
+            my_img_loss = opt.lamb * total_img_loss(pred_img, img)
+            my_pts_loss = total_pts_loss(pred_pts_list, pred_feats_list, pts, ellipsoid, use_cuda)
 
-            loss = torch.mean(dist1) + torch.mean(dist2) + opt.lamb * (rect_loss + l1_loss)
+            loss = my_pts_loss + my_img_loss
             val_loss.update(loss.item())
 
             if loss.item() < best_val_loss:
@@ -196,10 +219,24 @@ for epoch in range(opt.nEpoch):
                             markersize = 2,
                             ),
                         )
-                vis.scatter(X = pred_pts.data.cpu(),
-                        win = 'VAL_INPUT_RECONSTRUCTED',
+                vis.scatter(X = pred_pts_list[0].data.cpu(),
+                        win = 'VAL_INPUT_RECONSTRUCTED_L1',
                         opts = dict(
-                            title = "VAL_INPUT_RECONSTRUCTED",
+                            title = "VAL_INPUT_RECONSTRUCTED_L1",
+                            markersize = 2,
+                            ),
+                        )
+                vis.scatter(X = pred_pts_list[1].data.cpu(),
+                        win = 'VAL_INPUT_RECONSTRUCTED_L2',
+                        opts = dict(
+                            title = "VAL_INPUT_RECONSTRUCTED_L2",
+                            markersize = 2,
+                            ),
+                        )
+                vis.scatter(X = pred_pts_list[2].data.cpu(),
+                        win = 'VAL_INPUT_RECONSTRUCTED_L3',
+                        opts = dict(
+                            title = "VAL_INPUT_RECONSTRUCTED_L3",
                             markersize = 2,
                             ),
                         )
@@ -242,7 +279,7 @@ for epoch in range(opt.nEpoch):
 
     with open(logname, 'a') as f: #open and append
         f.write('json_stats: ' + json.dumps(log_table) + '\n')
-
+    """
     #save last network
     print('saving net...')
-    torch.save(network.state_dict(), '%s/network.pth' % (dir_name))
+    torch.save(network.state_dict(), '%s/network_%i.pth' % (dir_name, epoch))
