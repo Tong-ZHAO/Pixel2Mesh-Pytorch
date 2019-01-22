@@ -19,7 +19,8 @@ def laplace_coord(input, lap_idx, block_id, use_cuda = True):
     # The laplacian coordinates of input with respect to edges as in lap_idx
 
 
-    vertex = torch.cat((input, torch.zeros(1, 3).cuda()), 0) if use_cuda else torch.cat((input, torch.zeros(1,3)), 0)
+    vertex = torch.cat((input, torch.zeros(1, 3).cuda()), 0) if use_cuda else torch.cat((input, torch.zeros(1, 3)), 0)
+    
     indices = torch.tensor(lap_idx[block_id][:, :8])
     weights = torch.tensor(lap_idx[block_id][:,-1], dtype = torch.float32)
 
@@ -28,7 +29,13 @@ def laplace_coord(input, lap_idx, block_id, use_cuda = True):
         weights = weights.cuda()
 
     weights = torch.reciprocal(weights).reshape((-1, 1)).repeat((1, 3))
-    laplace = torch.sum(vertex[indices], 1)
+
+    num_pts, num_indices = indices.shape[0], indices.shape[1]
+    indices = indices.reshape((-1,))
+    vertices = torch.index_select(vertex, 0, indices)
+    vertices = vertices.reshape((num_pts, num_indices, 3))
+
+    laplace = torch.sum(vertices, 1)
     laplace = input - torch.mul(laplace, weights)
         
     return laplace
@@ -56,11 +63,20 @@ def laplace_loss(input1, input2, lap_idx, block_id, use_cuda = True):
 
 
 
-def edge_loss(pred, gt_pts, edges, block_id):
+def edge_loss(pred, gt_pts, edges, block_id, use_cuda = True):
 
 	# edge in graph
-    nod1 = pred[edges[block_id][:, 0]]
-    nod2 = pred[edges[block_id][:, 1]]
+    #nod1 = pred[edges[block_id][:, 0]]
+    #nod2 = pred[edges[block_id][:, 1]]
+    idx1 = torch.tensor(edges[block_id][:, 0]).long()
+    idx2 = torch.tensor(edges[block_id][:, 1]).long()
+
+    if use_cuda:
+        idx1 = idx1.cuda()
+        idx2 = idx2.cuda()
+
+    nod1 = torch.index_select(pred, 0, idx1)
+    nod2 = torch.index_select(pred, 0, idx2)
     edge = nod1 - nod2
 
 	# edge length loss
@@ -93,12 +109,10 @@ def total_pts_loss(pred_pts_list, pred_feats_list, gt_pts, ellipsoid, use_cuda =
     for i in range(3):
         dist1, dist2 = distChamfer(gt_pts, pred_pts_list[i].unsqueeze(0))
         my_chamfer_loss += torch.mean(dist1) + torch.mean(dist2)
-
-        my_edge_loss += edge_loss(pred_pts_list[i], gt_pts, ellipsoid["edges"], i)
-
+        my_edge_loss += edge_loss(pred_pts_list[i], gt_pts, ellipsoid["edges"], i, use_cuda)
         my_lap_loss += lap_const[i] * laplace_loss(pred_feats_list[i], pred_pts_list[i], ellipsoid["lap_idx"], i, use_cuda)
 
-    my_pts_loss = my_chamfer_loss + 0.1 * my_edge_loss + 0.3 * my_lap_loss
+    my_pts_loss = 100 * my_chamfer_loss + 0.1 * my_edge_loss + 0.3 * my_lap_loss
 
     return my_pts_loss
 
