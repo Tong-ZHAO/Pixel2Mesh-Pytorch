@@ -1,0 +1,127 @@
+P2M_Model(
+  (nn_encoder): VGG16_Pixel2Mesh(
+    (conv0_1): Conv2d(3, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv0_2): Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv1_1): Conv2d(16, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))
+    (conv1_2): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv1_3): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2_1): Conv2d(32, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))
+    (conv2_2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2_3): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv3_1): Conv2d(64, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))
+    (conv3_2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv3_3): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv4_1): Conv2d(128, 256, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2))
+    (conv4_2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv4_3): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv5_1): Conv2d(256, 512, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2))
+    (conv5_2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv5_3): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv5_4): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (nn_decoder): VGG16_Decoder(
+    (conv_1): ConvTranspose2d(512, 256, kernel_size=(2, 2), stride=(2, 2))
+    (conv_2): ConvTranspose2d(512, 128, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (conv_3): ConvTranspose2d(256, 64, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (conv_4): ConvTranspose2d(128, 32, kernel_size=(6, 6), stride=(2, 2), padding=(2, 2))
+    (conv_5): ConvTranspose2d(32, 3, kernel_size=(6, 6), stride=(2, 2), padding=(2, 2))
+  )
+  (GCN_0): GBottleneck(
+    (blocks): Sequential(
+      (0): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (1): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (2): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (3): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (4): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (5): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+    )
+    (conv1): GraphConvolution (963 -> 192)
+    (conv2): GraphConvolution (192 -> 3)
+  )
+  (GCN_1): GBottleneck(
+    (blocks): Sequential(
+      (0): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (1): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (2): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (3): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (4): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (5): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+    )
+    (conv1): GraphConvolution (1155 -> 192)
+    (conv2): GraphConvolution (192 -> 3)
+  )
+  (GCN_2): GBottleneck(
+    (blocks): Sequential(
+      (0): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (1): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (2): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (3): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (4): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+      (5): GResBlock(
+        (conv1): GraphConvolution (192 -> 192)
+        (conv2): GraphConvolution (192 -> 192)
+      )
+    )
+    (conv1): GraphConvolution (1155 -> 192)
+    (conv2): GraphConvolution (192 -> 192)
+  )
+  (GPL_1): GraphPooling (155 -> 617)
+  (GPL_2): GraphPooling (617 -> 2465)
+  (GPR_0): GraphProjection()
+  (GPR_1): GraphProjection()
+  (GPR_2): GraphProjection()
+  (GConv): GraphConvolution (192 -> 3)
+  (GPL_12): GraphPooling (155 -> 617)
+  (GPL_22): GraphPooling (617 -> 2465)
+)
