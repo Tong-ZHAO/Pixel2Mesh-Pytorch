@@ -1,6 +1,8 @@
 # Pixel2Mesh-Pytorch
 
-This repository aims to implement the ECCV 2018 paper: [Pixel2Mesh: Generating 3D Mesh Models from Single RGB Images](http://bigvid.fudan.edu.cn/pixel2mesh/) in PyTorch. The [official code](https://github.com/nywang16/Pixel2Mesh) in Tensorflow is available online.
+This repository aims to implement the ECCV 2018 paper: [Pixel2Mesh: Generating 3D Mesh Models from Single RGB Images](http://bigvid.fudan.edu.cn/pixel2mesh/) in PyTorch. The [official code](https://github.com/nywang16/Pixel2Mesh) in Tensorflow is available online. Based on the proposed structure, we replaced the VGG model by a U-Net based autoencoder to reconstruct the image, which helps the net to converge faster.
+
+<img src="/img/net.png" width="900"/>
 
 ## Requirements
 
@@ -57,6 +59,8 @@ Due to the device limit, we trained our model on the airplane class instead of t
 
 Some test examples are shown as below:
 
+<img src="/img/examples_1.png" width="900"/>
 
+<img src="/img/examples_2.png" width="900"/>
 
 
