@@ -11,20 +11,52 @@ This repository aims to implement the ECCV 2018 paper: [Pixel2Mesh: Generating 3
 
 ## External Codes
 
-* [pygcn](https://github.com/tkipf/pygcn/tree/master/pygcn): GraphConvolution
+* [pygcn](https://github.com/tkipf/pygcn/tree/master/pygcn): Base code of GraphConvolution
 * [atlasnet](https://github.com/ThibaultGROUEIX/AtlasNet/tree/master/extension): Chamfer Distance
 
-More details will be added soon...
+## Getting Started
 
-## Build
+### Installation
 
 ```
 cd ./model/chamfer/
 python setup.py install
 ```
 
-## Run
+### Dataset
+
+We use the same dataset as the one used in Pixel2Mesh. The point clouds are from [ShapeNet](https://www.shapenet.org/) and the rendered views are from [3D-R2N2](https://github.com/chrischoy/3D-R2N2).
+
+The whole dataset can be downloaded [Here](https://drive.google.com/file/d/1Z8gt4HdPujBNFABYrthhau9VZW10WWYe/view?usp=sharing).
+
+Please respect the [ShapeNet license](https://shapenet.org/terms) while using.
+
+### Train
 
 ```
 python train.py
 ```
+
+The hyper-parameters can be changed from command. To get more help, please use
+
+```
+python train.py -h
+```
+
+### Validation
+
+To evaluate the model on one example, please use the following command
+
+```
+python evaluate.py --dataPath *** --modelPath ***
+```
+
+## Some Examples
+
+Due to the device limit, we trained our model on the airplane class instead of the whole dataset. A trained model is provided [Here](https://github.com/Tong-ZHAO/Pixel2Mesh-Pytorch/blob/master/log/2019-01-18T02:32:24.320546/network_4.pth)
+
+Some test examples are shown as below:
+
+
+
+
