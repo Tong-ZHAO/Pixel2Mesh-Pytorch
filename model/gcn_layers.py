@@ -35,10 +35,8 @@ def dot(x, y, sparse = False):
 
 class GraphConvolution(Module):
     """Simple GCN layer
-    
     Similar to https://arxiv.org/abs/1609.02907
     """
-
     def __init__(self, in_features, out_features, adjs, bias=True, use_cuda = True):
         super(GraphConvolution, self).__init__()
         self.in_features = in_features
@@ -48,7 +46,9 @@ class GraphConvolution(Module):
         adj1 = torch_sparse_tensor(*adjs[1], use_cuda)
         self.adjs = [adj0, adj1]
 
-        self.weight = Parameter(torch.FloatTensor(in_features, out_features))
+        self.weight_1 = Parameter(torch.FloatTensor(in_features, out_features))
+        self.weight_2 = Parameter(torch.FloatTensor(in_features, out_features))
+
         if bias:
             self.bias = Parameter(torch.FloatTensor(out_features))
         else:
@@ -56,16 +56,18 @@ class GraphConvolution(Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.weight.size(1))
-        self.weight.data.uniform_(-stdv, stdv)
+        stdv = 1. / math.sqrt(self.weight_1.size(1))
+        self.weight_1.data.uniform_(-stdv, stdv)
+        self.weight_2.data.uniform_(-stdv, stdv)
         if self.bias is not None:
             self.bias.data.uniform_(-stdv, stdv)
 
     def forward(self, input):
-        support = torch.matmul(input, self.weight)
+        support_1 = torch.matmul(input, self.weight_1)
+        support_2 = torch.matmul(input, self.weight_2)
         #output = torch.spmm(adj, support)
-        output1 = dot(self.adjs[0], support, True)
-        output2 = dot(self.adjs[1], support, True)
+        output1 = dot(self.adjs[0], support_1, True)
+        output2 = dot(self.adjs[1], support_2, True)
         output = output1 + output2
         if self.bias is not None:
             return output + self.bias
@@ -74,9 +76,8 @@ class GraphConvolution(Module):
 
     def __repr__(self):
         return self.__class__.__name__ + ' (' \
-               + str(self.in_features) + ' -> ' \
-               + str(self.out_features) + ')'
-
+            + str(self.in_features) + ' -> ' \
+            + str(self.out_features) + ')'
 
 
 class GraphPooling(Module):

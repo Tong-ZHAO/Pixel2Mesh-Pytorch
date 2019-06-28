@@ -17,7 +17,7 @@ import random
 
 # Parameters
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataPath', type = str, default = '/home/pkq/tong/MVA/S1/objet/project/data/ShapeNetSmall/02691156_d3b9114df1d8a3388e415c6cf89025f0_02.dat', 
+parser.add_argument('--dataPath', type = str, default = 'data/ShapeNetTrain/02691156_d3b9114df1d8a3388e415c6cf89025f0_02.dat', 
                     help = 'the path to find the data')
 parser.add_argument('--modelPath', type = str, default = 'log/2019-01-18T02:32:24.320546/network_4.pth',  help = 'the path to find the trained model')
 parser.add_argument('--savePath', type = str, default = 'eval/',  help = 'the path to save the reconstructed meshes')
@@ -39,7 +39,11 @@ ellipsoid = read_init_mesh('data/info_ellipsoid.dat')
 # Create Network
 network = P2M_Model(opt.featDim, opt.hidden, opt.coordDim, ellipsoid['pool_idx'], ellipsoid['supports'], use_cuda)
 #network.apply(weights_init) #initialization of the weight
-network.load_state_dict(torch.load(opt.modelPath))
+if use_cuda:
+    network.load_state_dict(torch.load(opt.modelPath))
+else:
+    network.load_state_dict(torch.load(opt.modelPath, map_location='cpu'))
+
 network.eval()
 
 if use_cuda:
